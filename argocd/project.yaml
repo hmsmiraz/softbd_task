@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: softbd-project
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  description: SoftBD Laravel Kubernetes Deployment Project
+
+  sourceRepos:
+    - https://github.com/hmsmiraz/softbd_task.git
+
+  destinations:
+    - namespace: laravel
+      server: https://kubernetes.default.svc
+    - namespace: ingress-nginx
+      server: https://kubernetes.default.svc
+
+  clusterResourceWhitelist:
+    - group: ''
+      kind: Namespace
+
+  namespaceResourceWhitelist:
+    - group: apps
+      kind: Deployment
+    - group: ''
+      kind: Service
+    - group: ''
+      kind: ConfigMap
+    - group: ''
+      kind: Secret
+    - group: ''
+      kind: PersistentVolumeClaim
+    - group: networking.k8s.io
+      kind: Ingress
+    - group: autoscaling
+      kind: HorizontalPodAutoscaler
+    - group: policy
+      kind: PodDisruptionBudget
+    - group: networking.k8s.io
+      kind: NetworkPolicy
+    - group: batch
+      kind: CronJob
+
+  roles:
+    - name: developer
+      description: Developer access
+      policies:
+        - p, proj:softbd-project:developer, applications, get, softbd-project/*, allow
+        - p, proj:softbd-project:developer, applications, sync, softbd-project/*, allow

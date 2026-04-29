@@ -1,0 +1,56 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: laravel-app
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  labels:
+    app: laravel-app
+    environment: production
+spec:
+  project: softbd-project
+
+  source:
+    repoURL: https://github.com/hmsmiraz/softbd_task.git
+    targetRevision: main
+    path: helm/laravel-app
+    helm:
+      releaseName: laravel-app
+      valueFiles:
+        - values.yaml
+      parameters:
+        - name: image.repository
+          value: hmsmiraz/softbd-task
+        - name: image.tag
+          value: v1.0.0
+        - name: redis.enabled
+          value: "true"
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: laravel
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+
+  revisionHistoryLimit: 10
+
+  ignoreDifferences:
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas
