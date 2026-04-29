@@ -62,7 +62,6 @@ Install these tools before starting:
 
 ## Project Structure
 ```text
-
 softbd_task/
 ├── app/                        # Laravel application code
 ├── routes/
