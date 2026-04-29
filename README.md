@@ -1,5 +1,3 @@
-
-```markdown
 # SoftBD Laravel Kubernetes Deployment
 
 A production-ready Laravel application deployed on a Kubernetes cluster using Docker, kubeadm, and Helm on AWS EC2.
@@ -104,6 +102,8 @@ softbd_task/
 ├── Dockerfile                   # Multi-stage production Dockerfile
 ├── .dockerignore
 └── README.md
+
+---
 
 ## Cluster Setup
 
