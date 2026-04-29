@@ -105,8 +105,6 @@ softbd_task/
 ├── .dockerignore
 └── README.md
 
----
-
 ## Cluster Setup
 
 ### Step 1 — Configure AWS CLI
