@@ -128,6 +128,10 @@ terraform init
 terraform plan
 terraform apply
 ```
+Save the output IPs:    
+control_plane_1_public_ip = "X.X.X.X"   
+control_plane_2_public_ip = "X.X.X.X"   
+worker_1_public_ip        = "X.X.X.X"   
 
 This creates:
 
@@ -137,14 +141,170 @@ This creates:
 * Security groups with all required Kubernetes ports
 * Elastic IP for Control Plane 1
 
-### Step 4 — Install Kubernetes on All Nodes
+### Step 4 — Install Kubernetes Dependencies on All Nodes
+
+Run this script on **each of the 3 nodes** (CP1, CP2, Worker):
 
 ```bash
+# Copy script to node
 scp -i ~/.ssh/k8s-key terraform/k8s-install.sh ubuntu@<NODE_IP>:~/k8s-install.sh
+
+# Run script on node
 ssh -i ~/.ssh/k8s-key ubuntu@<NODE_IP> "chmod +x ~/k8s-install.sh && sudo ~/k8s-install.sh"
 ```
 
-Repeat for all 3 nodes: Control Plane 1, Control Plane 2, Worker.
+The script installs on each node:
+- `containerd` — container runtime
+- `kubeadm` — cluster bootstrapping tool
+- `kubelet` — node agent
+- `kubectl` — command line tool
+- Kernel modules: `overlay`, `br_netfilter`
+- Sysctl settings for Kubernetes networking
+
+Verify on each node after the script finishes:
+```bash
+ssh -i ~/.ssh/k8s-key ubuntu@<NODE_IP> "kubeadm version && kubectl version --client"
+```
+
+### Step 5 — Initialize Control Plane 1
+
+```bash
+ssh -i ~/.ssh/k8s-key ubuntu@<CP1_PUBLIC_IP>
+
+sudo kubeadm init \
+  --control-plane-endpoint "<CP1_PUBLIC_IP>:6443" \
+  --upload-certs \
+  --pod-network-cidr "192.168.0.0/16" \
+  --apiserver-advertise-address "<CP1_PRIVATE_IP>"
+```
+
+Set up kubectl on CP1:
+```bash
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+kubectl get nodes
+```
+
+> ⚠️ **IMPORTANT:** Save both join commands from the output — they expire in 2 hours.
+
+### Step 6 — Join Control Plane 2
+
+```bash
+ssh -i ~/.ssh/k8s-key ubuntu@<CP2_PUBLIC_IP>
+
+sudo kubeadm join <CP1_PUBLIC_IP>:6443 \
+  --token <TOKEN> \
+  --discovery-token-ca-cert-hash sha256:<HASH> \
+  --control-plane \
+  --certificate-key <CERT_KEY> \
+  --apiserver-advertise-address <CP2_PRIVATE_IP>
+
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+exit
+```
+
+### Step 7 — Join Worker Node
+
+```bash
+ssh -i ~/.ssh/k8s-key ubuntu@<WORKER_PUBLIC_IP>
+
+sudo kubeadm join <CP1_PUBLIC_IP>:6443 \
+  --token <TOKEN> \
+  --discovery-token-ca-cert-hash sha256:<HASH>
+
+exit
+```
+
+> If the token expired, regenerate on CP1:
+> ```bash
+> ssh -i ~/.ssh/k8s-key ubuntu@<CP1_PUBLIC_IP>
+> kubeadm token create --print-join-command
+> ```
+
+### Step 8 — Copy kubeconfig to Your Local PC
+
+```bash
+# Windows (Command Prompt as Admin)
+mkdir C:\Users\%USERNAME%\.kube
+scp -i C:\Users\%USERNAME%\.ssh\k8s-key ubuntu@<CP1_PUBLIC_IP>:~/.kube/config C:\Users\%USERNAME%\.kube\config
+
+# Linux/Mac
+mkdir -p ~/.kube
+scp -i ~/.ssh/k8s-key ubuntu@<CP1_PUBLIC_IP>:~/.kube/config ~/.kube/config
+
+# Verify
+kubectl get nodes
+```
+
+### Step 9 — Install Calico CNI
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/projectcalico/calico/v3.27.0/manifests/calico.yaml
+
+# Wait for Calico pods to be ready
+kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n kube-system --timeout=120s
+
+# Verify all nodes are Ready
+kubectl get nodes -o wide
+```
+
+Expected output:
+NAME            STATUS   ROLES           VERSION
+ip-10-0-1-61    Ready    control-plane   v1.30.0
+ip-10-0-1-228   Ready    control-plane   v1.30.0
+ip-10-0-1-213   Ready    <none>          v1.30.0
+
+### Step 10 — Install ingress-nginx
+
+```bash
+helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+helm repo update
+
+helm install ingress-nginx ingress-nginx/ingress-nginx \
+  --namespace ingress-nginx \
+  --create-namespace \
+  --set controller.service.type=NodePort \
+  --set controller.service.nodePorts.http=30080 \
+  --set controller.service.nodePorts.https=30443
+
+# Verify
+kubectl get pods -n ingress-nginx
+```
+
+### Step 11 — Install Local Path Provisioner (Storage)
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.26/deploy/local-path-storage.yaml
+
+kubectl patch storageclass local-path \
+  -p "{\"metadata\": {\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}"
+
+# Verify
+kubectl get storageclass
+```
+
+### Step 12 — Verify the Cluster
+
+Run all these and save outputs for documentation:
+
+```bash
+# All nodes should show Ready
+kubectl get nodes -o wide
+
+# All system pods should show Running
+kubectl get pods -A
+
+# Should show API server and CoreDNS URLs
+kubectl cluster-info
+
+# Should show No resources found (no ingress deployed yet)
+kubectl get ingress -A
+```
 
 ---
 
@@ -165,11 +325,36 @@ docker push hmsmiraz/softbd-task:latest
 docker push hmsmiraz/softbd-task:v1.0.0
 ```
 
+### Run locally for testing
+
+```bash
+docker run -d --name softbd-test -p 8080:80 \
+  -e APP_KEY=base64:2fl+Ry4zVhtFLkEZRyghAqNXiSB8YiMkNsCs3QmpUcY= \
+  -e APP_ENV=local \
+  hmsmiraz/softbd-task:latest
+
+curl http://localhost:8080
+curl http://localhost:8080/health
+
+docker stop softbd-test && docker rm softbd-test
+```
+
 ---
 
 ## Helm Deployment
 
 ### Install
+
+```bash
+kubectl create namespace laravel
+
+kubectl create secret docker-registry dockerhub-secret \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=YOUR_DOCKERHUB_USERNAME \
+  --docker-password=YOUR_DOCKERHUB_PASSWORD \
+  --docker-email=YOUR_EMAIL \
+  -n laravel
+```
 
 ```bash
 helm install laravel-app helm/laravel-app \
@@ -179,6 +364,23 @@ helm install laravel-app helm/laravel-app \
   --set image.repository=hmsmiraz/softbd-task \
   --set image.tag=v1.0.0 \
   --set redis.enabled=true
+```
+
+```bash
+# Upgrade
+helm upgrade laravel-app helm/laravel-app \
+  --namespace laravel \
+  --set secret.appKey="base64:YOUR_APP_KEY" \
+  --set image.repository=hmsmiraz/softbd-task \
+  --set image.tag=v1.0.1 \
+  --set redis.enabled=true
+
+# Status
+helm status laravel-app -n laravel
+helm list -n laravel
+
+# Uninstall
+helm uninstall laravel-app -n laravel
 ```
 
 ---
