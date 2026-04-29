@@ -2,7 +2,7 @@
 
 A production-ready Laravel application deployed on a Kubernetes cluster using Docker, kubeadm, and Helm on AWS EC2.
 
-**Live Cluster:** `https://52.220.106.126:6443`  
+**Live Cluster:** `https://52.220.106.126:6443` | `http://laravel-test.local:30080`
 **Docker Image:** `hmsmiraz/softbd-task:v1.0.0`  
 **GitHub Repository:** [https://github.com/hmsmiraz/softbd_task](https://github.com/hmsmiraz/softbd_task)
 
