@@ -31,7 +31,7 @@ spec:
         - name: queue-worker
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3"]
+          command: ["php", "artisan", "queue:work", "--sleep=3", "--tries=3", "--max-time=3600"]
           envFrom:
             - configMapRef:
                 name: {{ include "laravel-app.fullname" . }}-config

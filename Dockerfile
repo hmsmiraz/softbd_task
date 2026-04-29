@@ -14,7 +14,11 @@ RUN apk add --no-cache \
         zip \
         gd \
         pcntl \
-        bcmath
+        bcmath \
+    && apk add --no-cache --virtual .build-deps $PHPIZE_DEPS \
+    && pecl install redis-6.0.2 \
+    && docker-php-ext-enable redis \
+    && apk del .build-deps
 
 RUN addgroup -g 1000 -S www && \
     adduser -u 1000 -S www -G www

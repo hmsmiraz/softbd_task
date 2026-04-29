@@ -43,13 +43,20 @@ pvc:
   storageSize: 1Gi
   storageClass: ""
 
+redis:
+  enabled: true
+  host: ""
+
 env:
   APP_ENV: production
   APP_DEBUG: "false"
   LOG_CHANNEL: stderr
-  CACHE_DRIVER: file
-  SESSION_DRIVER: file
-  QUEUE_CONNECTION: sync
+  CACHE_DRIVER: redis
+  SESSION_DRIVER: redis
+  QUEUE_CONNECTION: redis
+  REDIS_HOST: ""
+  REDIS_PORT: "6379"
+  REDIS_DB: "0"
 
 secret:
   appKey: ""
