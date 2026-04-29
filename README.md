@@ -61,6 +61,7 @@ Install these tools before starting:
 ---
 
 ## Project Structure
+```text
 
 softbd_task/
 ├── app/                        # Laravel application code
@@ -102,8 +103,7 @@ softbd_task/
 ├── Dockerfile                   # Multi-stage production Dockerfile
 ├── .dockerignore
 └── README.md
-
----
+```
 
 ## Cluster Setup
 
