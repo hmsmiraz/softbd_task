@@ -2,7 +2,7 @@
 
 A production-ready Laravel application deployed on a Kubernetes cluster using Docker, kubeadm, and Helm on AWS EC2.
 
-**Live Cluster:** [https://52.220.106.126:6443](https://52.220.106.126:6443)  
+**Live Cluster:** [https://18.143.242.70:6443](https://18.143.242.70:6443)  
 **Live Link:** [http://laravel-test.local:30080](http://laravel-test.local:30080)   
 **Docker Image:** `hmsmiraz/softbd-task:v1.0.0`   
 **GitHub Repository:** [https://github.com/hmsmiraz/softbd_task](https://github.com/hmsmiraz/softbd_task)
@@ -32,9 +32,9 @@ Internet
 ▼  
 AWS EC2 (ap-southeast-1)  
 │  
-├── Control Plane 1 (t3.small) - 52.220.106.126  
-├── Control Plane 2 (t3.small) - 13.212.249.154  
-└── Worker Node    (t3.small) - 47.128.152.86  
+├── Control Plane 1 (t3.small) - 18.143.242.70  
+├── Control Plane 2 (t3.small) - 13.250.63.179  
+└── Worker Node    (t3.small) - 54.254.158.88  
 │  
 ├── ingress-nginx (NodePort 30080)  
 ├── Calico CNI  
@@ -118,6 +118,16 @@ aws configure
 
 ```bash
 ssh-keygen -t rsa -b 4096 -f ~/.ssh/k8s-key
+
+#  The ~ path doesn't work in Windows Command Prompt. Use the full path instead:
+
+ssh-keygen -t rsa -b 4096 -f C:\Users\hmsmi\.ssh\k8s-key
+
+
+# If the .ssh folder doesn't exist yet:
+
+mkdir C:\Users\hmsmi\.ssh
+ssh-keygen -t rsa -b 4096 -f C:\Users\hmsmi\.ssh\k8s-key
 ```
 
 ### Step 3 — Provision Infrastructure with Terraform
@@ -151,7 +161,13 @@ scp -i ~/.ssh/k8s-key terraform/k8s-install.sh ubuntu@<NODE_IP>:~/k8s-install.sh
 
 # Run script on node
 ssh -i ~/.ssh/k8s-key ubuntu@<NODE_IP> "chmod +x ~/k8s-install.sh && sudo ~/k8s-install.sh"
+
+#Face any issues like about path
+scp -i C:\Users\hmsmi\.ssh\k8s-key -o StrictHostKeyChecking=no C:\Users\hmsmi\Projects\softbd_task\terraform\k8s-install.sh ubuntu@<Node_IP>:~/k8s-install.sh
+
+ssh -i C:\Users\hmsmi\.ssh\k8s-key ubuntu@<Node_IP> "chmod +x ~/k8s-install.sh && sudo ~/k8s-install.sh"
 ```
+
 
 The script installs on each node:
 - `containerd` — container runtime
@@ -253,10 +269,10 @@ kubectl wait --for=condition=ready pod -l k8s-app=calico-node -n kube-system --t
 kubectl get nodes -o wide
 ```
 
-Expected output:
-NAME            STATUS   ROLES           VERSION
-ip-10-0-1-61    Ready    control-plane   v1.30.0
-ip-10-0-1-228   Ready    control-plane   v1.30.0
+Expected output:      
+NAME            STATUS   ROLES           VERSION    
+ip-10-0-1-61    Ready    control-plane   v1.30.0    
+ip-10-0-1-228   Ready    control-plane   v1.30.0    
 ip-10-0-1-213   Ready    <none>          v1.30.0
 
 ### Step 10 — Install ingress-nginx
@@ -272,6 +288,10 @@ helm install ingress-nginx ingress-nginx/ingress-nginx \
   --set controller.service.nodePorts.http=30080 \
   --set controller.service.nodePorts.https=30443
 
+# For Windows Terminal
+
+helm install ingress-nginx ingress-nginx/ingress-nginx --namespace ingress-nginx --create-namespace --set controller.service.type=NodePort --set controller.service.nodePorts.http=30080 --set controller.service.nodePorts.https=30443
+
 # Verify
 kubectl get pods -n ingress-nginx
 ```
@@ -281,8 +301,12 @@ kubectl get pods -n ingress-nginx
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.26/deploy/local-path-storage.yaml
 
+
 kubectl patch storageclass local-path \
   -p "{\"metadata\": {\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}"
+
+# For Windows Terminal
+kubectl patch storageclass local-path -p "{\"metadata\": {\"annotations\":{\"storageclass.kubernetes.io/is-default-class\":\"true\"}}}"
 
 # Verify
 kubectl get storageclass
@@ -308,7 +332,7 @@ kubectl get ingress -A
 
 ---
 
-## Docker Build & Push
+## Docker Build & Push In VS Code Terminal
 
 ### Build
 
@@ -341,20 +365,9 @@ docker stop softbd-test && docker rm softbd-test
 
 ---
 
-## Helm Deployment
+## Helm Deployment - Run In PC Terminal
 
 ### Install
-
-```bash
-kubectl create namespace laravel
-
-kubectl create secret docker-registry dockerhub-secret \
-  --docker-server=https://index.docker.io/v1/ \
-  --docker-username=YOUR_DOCKERHUB_USERNAME \
-  --docker-password=YOUR_DOCKERHUB_PASSWORD \
-  --docker-email=YOUR_EMAIL \
-  -n laravel
-```
 
 ```bash
 helm install laravel-app helm/laravel-app \
@@ -364,6 +377,23 @@ helm install laravel-app helm/laravel-app \
   --set image.repository=hmsmiraz/softbd-task \
   --set image.tag=v1.0.0 \
   --set redis.enabled=true
+
+# For Windows Terminal
+helm install laravel-app helm/laravel-app --namespace laravel --create-namespace --set secret.appKey="base64:YOUR_APP_KEY" --set image.repository=hmsmiraz/softbd-task --set image.tag=v1.0.0 --set redis.enabled=true
+```
+
+```bash
+
+kubectl create secret docker-registry dockerhub-secret \
+  --docker-server=https://index.docker.io/v1/ \
+  --docker-username=YOUR_DOCKERHUB_USERNAME \
+  --docker-password=YOUR_DOCKERHUB_PASSWORD \
+  --docker-email=YOUR_EMAIL \
+  -n laravel
+
+# For Windows Terminal
+
+kubectl create secret docker-registry dockerhub-secret --docker-server=https://index.docker.io/v1/ --docker-username=hmsmiraz --docker-password=YOUR_DOCKERHUB_PASSWORD --docker-email=hassan.sharfuddin.miraz@gmail.com -n laravel
 ```
 
 ```bash
@@ -375,11 +405,14 @@ helm upgrade laravel-app helm/laravel-app \
   --set image.tag=v1.0.1 \
   --set redis.enabled=true
 
+# For Windows Terminal
+helm upgrade laravel-app helm/laravel-app --namespace laravel --set secret.appKey="base64:YOUR_APP_KEY" --set image.repository=hmsmiraz/softbd-task --set image.tag=v1.0.0 --set redis.enabled=true
+
 # Status
 helm status laravel-app -n laravel
 helm list -n laravel
 
-# Uninstall
+# Uninstall After Testing
 helm uninstall laravel-app -n laravel
 ```
 
@@ -390,7 +423,7 @@ helm uninstall laravel-app -n laravel
 ### Add to /etc/hosts (Linux/Mac)
 
 ```bash
-echo "52.220.106.126   laravel-test.local" | sudo tee -a /etc/hosts
+echo "18.143.242.70   laravel-test.local" | sudo tee -a /etc/hosts
 ```
 
 ### Add to hosts file (Windows)
@@ -398,7 +431,7 @@ echo "52.220.106.126   laravel-test.local" | sudo tee -a /etc/hosts
 Open Command Prompt as Administrator:
 
 ```cmd
-echo 52.220.106.126   laravel-test.local >> C:\Windows\System32\drivers\etc\hosts
+echo 18.143.242.70   laravel-test.local >> C:\Windows\System32\drivers\etc\hosts
 ```
 
 ### Test Endpoints
@@ -414,8 +447,8 @@ curl http://laravel-test.local:30080/health
 ### Test via Direct IP
 
 ```bash
-curl -H "Host: laravel-test.local" http://52.220.106.126:30080
-curl -H "Host: laravel-test.local" http://52.220.106.126:30080/health
+curl -H "Host: laravel-test.local" http://18.143.242.70:30080
+curl -H "Host: laravel-test.local" http://18.143.242.70:30080/health
 ```
 
 ### Required Laravel Commands
@@ -467,7 +500,7 @@ The GitHub Actions pipeline at `.github/workflows/ci-cd.yml` runs:
 2. **Build & Push** — Docker image pushed to Docker Hub on main branch
 3. **Deploy** — Helm upgrade to Kubernetes cluster
 
-> **Note on CI/CD Deploy Step:** The deploy step requires the GitHub Actions runner to reach the cluster API at `52.220.106.126:6443`. In production this would use a self-hosted runner inside the VPC or a VPN connection. The pipeline structure is correct and the test + build stages work successfully.
+> **Note on CI/CD Deploy Step:** The deploy step requires the GitHub Actions runner to reach the cluster API at `18.143.242.70:6443`. In production this would use a self-hosted runner inside the VPC or a VPN connection. The pipeline structure is correct and the test + build stages work successfully.
 
 ---
 
@@ -532,7 +565,7 @@ The GitHub Actions pipeline at `.github/workflows/ci-cd.yml` runs:
 | ImagePullBackOff           | Check dockerhub-secret: `kubectl get secret dockerhub-secret -n laravel`                                                        |
 | CrashLoopBackOff           | Check logs: `kubectl logs <pod-name> -n laravel`                                                                                |
 | Ingress not routing        | Verify ingress-nginx is running: `kubectl get pods -n ingress-nginx`                                                            |
-| 404 from nginx             | Ensure Host header matches: `curl -H "Host: laravel-test.local" http://52.220.106.126:30080`                                    |
+| 404 from nginx             | Ensure Host header matches: `curl -H "Host: laravel-test.local" http://18.143.242.70:30080`                                    |
 | Storage not working        | Run: `kubectl apply -f https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.26/deploy/local-path-storage.yaml` |
 | Nodes NotReady             | Check Calico pods: `kubectl get pods -n kube-system \| grep calico`                                                             |
 | kubeadm join token expired | On CP1: `kubeadm token create --print-join-command`                                                                             |
